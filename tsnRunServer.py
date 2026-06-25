@@ -6,6 +6,7 @@ import json
 import random
 import time
 from pathlib import Path
+from typing import Callable, Optional
 
 import httpx
 from PIL import Image
@@ -39,7 +40,8 @@ def seconds_to_time_format(total_seconds):
 
 
 class TsnRunServer:
-    def __init__(self, accountId: int, runKiloMeter: float, logRunType: TsnRunType):
+    def __init__(self, accountId: int, runKiloMeter: float, logRunType: TsnRunType,
+                 progress_callback: Optional[Callable[[dict], None]] = None):
         self.accountId = accountId
         self.runKiloMeter = runKiloMeter
         self.logRunType = logRunType
@@ -67,6 +69,17 @@ class TsnRunServer:
         self.middleFaces = []
         self.startLongitude = 0
         self.startLatitude = 0
+
+        self._progress_callback = progress_callback
+
+    def _emit(self, phase: str, **kw) -> None:
+        """向外推送一次进度事件。回调缺失或抛异常时静默，绝不影响主流程。"""
+        if self._progress_callback is None:
+            return
+        try:
+            self._progress_callback({"phase": phase, **kw})
+        except Exception:  # noqa: BLE001 — 故意吞掉，回调失败不能影响跑步
+            logger.warning("progress_callback raised; ignored")
 
     @classmethod
     def publicRunTypeConvert(cls, runType: TsnRunType):
