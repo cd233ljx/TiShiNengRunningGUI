@@ -1,3 +1,25 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>TiShiNeng</title></head>
-<body><div id="app">加载中...</div></body></html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TiShiNeng 模拟跑步</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">TiShiNeng · 模拟跑步</div>
+    <nav class="topnav">
+      <a href="#/home" data-nav>主页</a>
+      <a href="#/accounts" data-nav>账号</a>
+      <a href="#/settings" data-nav>设置</a>
+    </nav>
+  </header>
+  <main id="app" class="container">
+    <div class="loading">加载中...</div>
+  </main>
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>
