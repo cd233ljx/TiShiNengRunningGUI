@@ -45,6 +45,8 @@ def create_app(api_token: str) -> FastAPI:
     from webapp.routers import run as run_router
     app.include_router(run_router.router)
     app.include_router(run_router._ws_router)
+    from webapp.routers import face
+    app.include_router(face.router)
 
     # 全局异常 → 统一 {code, msg}
     from fastapi import HTTPException
