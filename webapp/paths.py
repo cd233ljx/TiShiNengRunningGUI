@@ -63,3 +63,20 @@ def frontend_dir() -> Path:
     if _is_frozen() and hasattr(sys, "_MEIPASS"):
         return Path(sys._MEIPASS) / "frontend"
     return project_root() / "frontend"
+
+
+import json
+
+
+def load_config() -> dict:
+    p = config_path()
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_config(data: dict) -> None:
+    config_path().write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
