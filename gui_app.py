@@ -53,6 +53,7 @@ def configure_runtime(dev: bool) -> tuple[str, int]:
 
     token = DEV_TOKEN if dev else generate_token()
     port = pick_free_port()
+    logger.info(f"Runtime configured: data_dir={data_dir}, db_path={db_path}, port={port}, dev={dev}")
     return token, port
 
 
@@ -62,7 +63,7 @@ def wait_for_backend(port: int, token: str, timeout: float = 5.0) -> bool:
     url = f"http://127.0.0.1:{port}/api/bootstrap"
     while time.time() < deadline:
         try:
-            r = httpx.get(url, headers={"X-API-Token": token}, timeout=1.0)
+            r = httpx.get(url, headers={"X-API-Token": token}, timeout=1.0, trust_env=False)
             if r.status_code == 200:
                 return True
         except Exception:
@@ -72,13 +73,11 @@ def wait_for_backend(port: int, token: str, timeout: float = 5.0) -> bool:
 
 
 def show_startup_error_dialog(message: str) -> None:
-    """后端起不来时的兜底对话框。优先用 tkinter（系统自带），失败则 print。"""
+    """后端起不来时的兜底对话框。冻结后避免 tkinter/Tcl runtime hook。"""
+    logger.error(message)
     try:
-        import tkinter as tk
-        from tkinter import messagebox
-        root = tk.Tk(); root.withdraw()
-        messagebox.showerror("TiShiNeng 启动失败", message)
-        root.destroy()
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, message, "TiShiNeng 启动失败", 0x10)
     except Exception:
         print(f"[ERROR] {message}", file=sys.stderr)
 
@@ -91,6 +90,7 @@ def main() -> int:
     token, port = configure_runtime(dev=args.dev)
     app = create_app(api_token=token)
     server = run_server_in_thread(app, port)
+    logger.info("Backend thread launched")
 
     if not server.wait_started(timeout=5.0):
         show_startup_error_dialog(f"后端线程未在 5 秒内启动。日志：{paths.logs_dir()}")

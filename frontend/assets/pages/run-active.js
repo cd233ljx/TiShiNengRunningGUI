@@ -55,8 +55,13 @@ export async function render(root, { task, km } = {}) {
   const $phase   = root.querySelector("#phase-text");
   const $dot     = root.querySelector(".phase-line .dot");
   const $cancel  = document.getElementById("cancel");
+  let terminalAction = null;
 
   $cancel.addEventListener("click", async () => {
+    if (terminalAction) {
+      terminalAction();
+      return;
+    }
     if (!window.confirm("确认取消当前跑步任务？")) return;
     try {
       await api("/api/run/cancel", {
@@ -92,8 +97,7 @@ export async function render(root, { task, km } = {}) {
       $phase.innerHTML = `<span class="tag success">完成</span>`;
       $dot.style.animation = "none";
       $dot.style.background = "var(--lane)";
-      $cancel.textContent = "返回主页";
-      $cancel.onclick = () => nav("/home");
+      setReturnHomeAction();
       setTimeout(() => nav("/home"), 3000);
       return;
     }
@@ -101,19 +105,22 @@ export async function render(root, { task, km } = {}) {
       $phase.innerHTML = `<span class="tag danger">失败</span> ${friendlyError(evt.code, evt.msg)}`;
       $dot.style.animation = "none";
       $dot.style.background = "var(--track)";
-      $cancel.textContent = "返回主页";
-      $cancel.onclick = () => nav("/home");
+      setReturnHomeAction();
       return;
     }
     if (phase === "cancelled") {
       $phase.innerHTML = `<span class="tag">已取消</span>`;
       $dot.style.animation = "none";
       $dot.style.background = "var(--mute)";
-      $cancel.textContent = "返回主页";
-      $cancel.onclick = () => nav("/home");
+      setReturnHomeAction();
       return;
     }
     $phase.textContent = PHASE_LABELS[phase] || phase;
+  }
+
+  function setReturnHomeAction() {
+    terminalAction = () => nav("/home");
+    $cancel.textContent = "返回主页";
   }
 }
 

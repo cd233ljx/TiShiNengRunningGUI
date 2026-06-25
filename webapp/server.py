@@ -128,8 +128,15 @@ class ServerThread(threading.Thread):
         self._started = threading.Event()
 
     def run(self) -> None:
-        config = uvicorn.Config(self.app, host=self.host, port=self.port,
-                                log_level="info", access_log=False, lifespan="on")
+        config = uvicorn.Config(
+            self.app,
+            host=self.host,
+            port=self.port,
+            log_level="info",
+            access_log=False,
+            lifespan="on",
+            log_config=None,
+        )
         self._server = uvicorn.Server(config)
 
         async def _serve():

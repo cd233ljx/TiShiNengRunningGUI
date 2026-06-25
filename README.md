@@ -91,6 +91,53 @@ pip install -r requirements.txt
 - `geopy` - 地理位置处理
 - `pillow` - 图像处理（人脸验证）
 
+## GUI 版本（推荐）
+
+面向非技术学生，提供桌面应用：
+
+### 下载使用
+
+1. 下载 `TiShiNeng.exe`（构建产物，位于 `dist/`）
+2. 放到任意目录，双击运行
+3. 首次启动会在同目录生成 `tsn_data.db`、`logs/`、`face_images/`（便携式）
+4. Windows 10 1809+ / Windows 11 通常自带 WebView2 Runtime；老版本 Windows 10 需先安装 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+
+### 从源码构建
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+.venv\Scripts\python -m PyInstaller tishineng.spec --clean --noconfirm
+# 产物: dist\TiShiNeng.exe
+```
+
+或一键校验：
+
+```bash
+scripts\verify-build.bat
+```
+
+一键校验会先运行 `pytest tests\ -q`，再执行 PyInstaller 构建，并检查
+`dist\TiShiNeng.exe` 是否生成。
+
+### 开发模式
+
+```bash
+.venv\Scripts\python gui_app.py --dev
+```
+
+`--dev` 启用 DevTools、固定 token。
+
+### 启动与网络注意事项
+
+- GUI 启动后会轮询本机 `http://127.0.0.1:<随机端口>/api/bootstrap`，确认后端可用后再打开窗口。
+- 本机后端探测与学校刷新中的可选公网查询会忽略系统代理环境变量，避免 Windows 开发机配置 `ALL_PROXY=socks5h://...` 时因为缺少可选 socks 依赖导致启动或测试失败。
+- 启动失败时会写入 `logs/tishineng-YYYY-MM-DD.log`；冻结后的错误提示使用 Windows 原生对话框，避免额外打包 tkinter/Tcl runtime。
+
+---
+
 ## 使用指南
 
 ### 启动程序

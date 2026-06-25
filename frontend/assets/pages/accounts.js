@@ -76,7 +76,7 @@ async function loadSchools() {
   try {
     const r = await api("/api/schools");
     if (!r.items.length) {
-      sel.innerHTML = '<option value="">尚无学校 — 请先刷新</option>';
+      setSelectMessage(sel, "尚无学校 — 请先刷新");
       if (search) search.style.display = "none";
       if (meta) meta.textContent = "";
       return;
@@ -90,18 +90,35 @@ async function loadSchools() {
     }
     if (meta) meta.textContent = `共 ${r.items.length} 所学校`;
   } catch (err) {
-    sel.innerHTML = `<option value="">加载失败: ${err.message}</option>`;
+    setSelectMessage(sel, `加载失败: ${err.message}`);
   }
 }
 
 function renderSchoolOptions(items) {
   const sel = document.getElementById("school-select");
   if (!items.length) {
-    sel.innerHTML = '<option value="">无匹配学校</option>';
+    setSelectMessage(sel, "无匹配学校");
     return;
   }
-  sel.innerHTML = '<option value="">请选择学校</option>' +
-    items.map(s => `<option value="${s.school_id}">${s.school_name} (${s.sys_type === 2 ? '公版' : '私版'})</option>`).join("");
+  sel.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "请选择学校";
+  sel.appendChild(placeholder);
+
+  items.forEach(s => {
+    const opt = document.createElement("option");
+    opt.value = String(s.school_id);
+    opt.textContent = `${s.school_name} (${s.sys_type === 2 ? "公版" : "私版"})`;
+    sel.appendChild(opt);
+  });
+}
+
+function setSelectMessage(sel, message) {
+  const opt = document.createElement("option");
+  opt.value = "";
+  opt.textContent = message;
+  sel.replaceChildren(opt);
 }
 
 function applySchoolFilter(query) {

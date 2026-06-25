@@ -9,6 +9,7 @@ venv/
 # Build artifacts
 dist/
 build/
+release/
 *.spec.bak
 
 # App runtime data (portable layout)

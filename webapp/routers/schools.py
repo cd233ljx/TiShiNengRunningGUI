@@ -73,7 +73,12 @@ async def _do_refresh(task_id: str) -> None:
         provinces = resp['data']
         total = 0
         skipped = 0
-        async with httpx.AsyncClient() as http:
+        # Keep the refresh task independent from host-level proxy variables.
+        # Some Windows dev machines expose ALL_PROXY as socks5h://..., which
+        # requires the optional socksio dependency even in tests where the SDK
+        # calls are mocked and this client is only used for optional public
+        # school LAN URL lookups.
+        async with httpx.AsyncClient(trust_env=False) as http:
             async for db in _raw_get_db():
                 for idx, province in enumerate(provinces, 1):
                     province_name = province.get('province_name', '?')
