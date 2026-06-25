@@ -125,3 +125,13 @@ def test_docs_onboarding_clears_on_route_leave_and_marks_seen_after_docs_render(
     assert "pendingDocsSeenAfterDocsOpen" in app
     assert "clearDocsOnboarding();" in off_home_branch
     assert "markDocsOnboardingSeen();" not in open_docs_handler
+
+def test_docs_toc_does_not_conflict_with_hash_router():
+    """Docs TOC links must not be mistaken for top-level hash routes."""
+    docs = read_frontend("frontend/assets/pages/docs.js")
+
+    assert 'href="#${id}"' not in docs
+    assert 'href="#before"' not in docs
+    assert "data-doc-anchor" in docs
+    assert "preventDefault()" in docs
+    assert "scrollIntoView" in docs

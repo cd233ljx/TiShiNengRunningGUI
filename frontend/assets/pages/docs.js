@@ -116,8 +116,16 @@ export async function render(root) {
         </section>
       </article>
     </div>`;
+
+  root.querySelectorAll("[data-doc-anchor]").forEach((anchor) => {
+    anchor.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = anchor.dataset.docAnchor;
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
 }
 
 function toc(id, label) {
-  return `<a href="#${id}">${label}</a>`;
+  return `<a href="#/docs?section=${id}" data-doc-anchor="${id}">${label}</a>`;
 }
