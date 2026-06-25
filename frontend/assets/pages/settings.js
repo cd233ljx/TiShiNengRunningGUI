@@ -19,7 +19,7 @@ export async function render(root) {
       <div class="field">
         <label>关于</label>
         <div style="font-family:var(--font-mono); font-size:11.5px; letter-spacing:0.08em; color:var(--mute); line-height:1.9;">
-          TISHINENG &middot; 0.1.0<br>
+          TISHINENG &middot; 0.2.0<br>
           STATION TSN-01<br>
           DATA &middot; 本程序所在目录（便携式）
         </div>

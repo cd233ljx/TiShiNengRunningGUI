@@ -5,7 +5,7 @@ from webapp.deps import require_token
 
 router = APIRouter(prefix="/api", tags=["bootstrap"])
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 
 
 @router.get("/bootstrap", dependencies=[Depends(require_token)])
