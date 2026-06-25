@@ -424,6 +424,7 @@ class TsnRunServer:
             logger.info("跑步数据上传完成")
 
     async def startRun(self):
+        self._emit("preparing", msg="加载账号信息...")
         async for newDb in get_db():
             self.accountModel = await getTsnAccountByid(self.accountId, newDb)
             self.tsnClient = await getTsnClientById(self.accountModel.id, newDb)
@@ -456,6 +457,7 @@ class TsnRunServer:
         if self.logRunType not in canRunTypeList:
             raise TiShiNengError('当前跑步类型不可用', 200000)
 
+        self._emit("path_gen", msg="生成跑步路径...")
         runLinePath = await self.queryPath()
         startPoint = runLinePath[0]
         logger.info(f"起点信息：{startPoint}")
@@ -489,6 +491,7 @@ class TsnRunServer:
         if not (len(self.middleFaces) > 0 or self.isStartFace == 1 or self.isEndFace == 1 or self.isMidwayFace == 1):
             self.isFaceStatus = 0
         if self.isStartFace == 1:
+            self._emit("face_start", msg="开始人脸验证...")
             logger.info('开始人脸识别')
             coordinates = f"{self.startLatitude},{self.startLongitude}"
             await asyncio.sleep(random.uniform(7, 12))
