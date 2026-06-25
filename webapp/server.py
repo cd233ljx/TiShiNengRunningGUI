@@ -38,6 +38,8 @@ def create_app(api_token: str) -> FastAPI:
 
     # 路由（后续阶段持续追加）
     app.include_router(bootstrap.router)
+    from webapp.routers import schools
+    app.include_router(schools.router)
 
     # 全局异常 → 统一 {code, msg}
     @app.exception_handler(Exception)
