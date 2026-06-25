@@ -40,8 +40,33 @@ def create_app(api_token: str) -> FastAPI:
     app.include_router(bootstrap.router)
     from webapp.routers import schools
     app.include_router(schools.router)
+    from webapp.routers import accounts
+    app.include_router(accounts.router)
 
     # 全局异常 → 统一 {code, msg}
+    from fastapi import HTTPException
+    from fastapi.exceptions import RequestValidationError
+    from TiShiNengError import TiShiNengError
+
+    @app.exception_handler(TiShiNengError)
+    async def _on_tsn_error(_req, exc: TiShiNengError):
+        return JSONResponse(status_code=400,
+                            content={"code": str(exc.code), "msg": exc.message})
+
+    @app.exception_handler(HTTPException)
+    async def _on_http_exc(_req, exc: HTTPException):
+        # detail 已是 {code, msg} 时直接用
+        if isinstance(exc.detail, dict) and "code" in exc.detail:
+            return JSONResponse(status_code=exc.status_code, content=exc.detail)
+        return JSONResponse(status_code=exc.status_code,
+                            content={"code": "HTTP_ERROR", "msg": str(exc.detail)})
+
+    @app.exception_handler(RequestValidationError)
+    async def _on_validation(_req, exc: RequestValidationError):
+        return JSONResponse(status_code=422,
+                            content={"code": "VALIDATION_ERROR",
+                                     "msg": "参数校验失败", "errors": exc.errors()})
+
     @app.exception_handler(Exception)
     async def _on_exception(_req, exc):
         from TiShiNengError import TiShiNengError

@@ -5,7 +5,7 @@ def test_bootstrap_without_token_returns_401(client):
     resp = client.get("/api/bootstrap")
     assert resp.status_code == 401
     body = resp.json()
-    assert body["detail"]["code"] == "BAD_TOKEN"
+    assert body["code"] == "BAD_TOKEN"
 
 
 def test_bootstrap_with_wrong_token_returns_401(client):

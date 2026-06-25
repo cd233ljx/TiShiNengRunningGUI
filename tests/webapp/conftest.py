@@ -1,4 +1,5 @@
 """webapp 测试公共 fixture：TestClient、临时数据目录。"""
+import asyncio
 import os
 from pathlib import Path
 
@@ -10,11 +11,27 @@ import webapp.paths as paths_mod
 
 @pytest.fixture
 def tmp_data_dir(tmp_path, monkeypatch):
-    """每个测试一个干净的数据目录。"""
+    """每个测试一个干净的数据目录。
+
+    注意：database.py 在 import 时已根据 DATABASE_URL 创建了模块级 engine，
+    后续 setenv 无法替换该 engine；因此每个测试只能 drop_all + create_all
+    复用共享 engine 来真正隔离数据。
+    """
     paths_mod.set_data_dir(tmp_path)
-    # 强制 database.py 用临时 SQLite
     db_url = f"sqlite+aiosqlite:///{(tmp_path / 'tsn_data.db').as_posix()}"
     monkeypatch.setenv("DATABASE_URL", db_url)
+
+    # 真清空共享 engine 上的全部数据
+    from database import Base, engine
+    import models  # noqa: F401 - 确保所有 ORM 模型注册到 Base.metadata
+
+    async def _reset():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.run(_reset())
+
     yield tmp_path
     paths_mod.set_data_dir(None)
 
