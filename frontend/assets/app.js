@@ -1,8 +1,21 @@
 // TiShiNeng GUI 前端入口。
 // 责任：(1) 从 URL 取 token 存到 sessionStorage；(2) hash 路由；
-// (3) 统一 api() / ws() 网络层；(4) 全局 toast；(5) 错误码 → 友好文案。
+// (3) 统一 api() / ws() 网络层；(4) 全局 toast；(5) 错误码 → 友好文案；
+// (6) 首次免责声明门禁与 Docs 引导。
+
+import {
+  DISCLAIMER_VERSION,
+  PHONE_SESSION_WARNING,
+  renderDisclaimerNotice,
+} from "./disclaimer.js";
 
 const TOKEN_KEY = "ts_token";
+const DISCLAIMER_VERSION_KEY = "ts_disclaimer_version";
+const DISCLAIMER_ACCEPTED_AT_KEY = "ts_disclaimer_accepted_at";
+const DOCS_ONBOARDING_SEEN_KEY = "ts_docs_onboarding_seen";
+
+const memoryLocalStorage = new Map();
+let pendingDocsOnboarding = false;
 
 // ============ token 引导 ============
 (function bootstrapToken() {
@@ -78,18 +91,50 @@ export function toast(msg, kind = "") {
 
 // ============ 主题 ============
 export function getTheme() {
-  return localStorage.getItem("ts_theme") || "light";
+  return safeLocalGet("ts_theme") || "light";
 }
 export function setTheme(t) {
-  localStorage.setItem("ts_theme", t);
+  safeLocalSet("ts_theme", t);
   document.documentElement.setAttribute("data-theme", t);
 }
 setTheme(getTheme());
+
+// ============ localStorage 安全封装 ============
+function safeLocalGet(key) {
+  try {
+    const value = localStorage.getItem(key);
+    if (value !== null) return value;
+  } catch { /* fall back to memory */ }
+  return memoryLocalStorage.has(key) ? memoryLocalStorage.get(key) : null;
+}
+
+function safeLocalSet(key, value) {
+  memoryLocalStorage.set(key, value);
+  try { localStorage.setItem(key, value); return true; } catch { return false; }
+}
+
+function hasAcceptedDisclaimer() {
+  return safeLocalGet(DISCLAIMER_VERSION_KEY) === DISCLAIMER_VERSION;
+}
+
+function markDisclaimerAccepted() {
+  safeLocalSet(DISCLAIMER_VERSION_KEY, DISCLAIMER_VERSION);
+  safeLocalSet(DISCLAIMER_ACCEPTED_AT_KEY, new Date().toISOString());
+}
+
+function hasSeenDocsOnboarding() {
+  return safeLocalGet(DOCS_ONBOARDING_SEEN_KEY) === "true";
+}
+
+function markDocsOnboardingSeen() {
+  safeLocalSet(DOCS_ONBOARDING_SEEN_KEY, "true");
+}
 
 // ============ 路由 ============
 const routes = {
   "/home":         () => import("./pages/home.js"),
   "/accounts":     () => import("./pages/accounts.js"),
+  "/docs":         () => import("./pages/docs.js"),
   "/run-setup":    () => import("./pages/run-setup.js"),
   "/run-active":   () => import("./pages/run-active.js"),
   "/face-update":  () => import("./pages/face-update.js"),
@@ -99,6 +144,11 @@ const routes = {
 };
 
 async function render() {
+  if (!hasAcceptedDisclaimer()) {
+    renderDisclaimerGate();
+    return;
+  }
+
   const hash = location.hash.replace(/^#/, "") || "/home";
   const [path, query] = hash.split("?");
   const loader = routes[path] || routes["/home"];
@@ -117,6 +167,75 @@ async function render() {
   document.querySelectorAll("[data-nav]").forEach(a => {
     const target = a.getAttribute("href").replace(/^#/, "");
     a.classList.toggle("active", target === path);
+  });
+
+  maybeShowDocsOnboarding(path);
+}
+
+function renderDisclaimerGate() {
+  const root = document.getElementById("app");
+  document.querySelectorAll("[data-nav]").forEach(a => a.classList.remove("active"));
+  root.innerHTML = `
+    <section class="gate-shell" aria-labelledby="disclaimer-title">
+      <div class="gate-card">
+        <div class="gate-kicker">FIRST RUN CHECK</div>
+        <h1 id="disclaimer-title" class="gate-title">使用前请确认免责声明</h1>
+        ${renderDisclaimerNotice("gate-notice")}
+        <div id="gate-exit-hint" class="gate-exit-hint" hidden>请直接关闭此窗口，或返回后点击同意继续。</div>
+        <div class="btn-row gate-actions">
+          <button class="btn" id="accept-disclaimer">我已阅读并同意</button>
+          <button class="btn secondary" id="decline-disclaimer">暂不使用</button>
+        </div>
+      </div>
+    </section>`;
+
+  document.getElementById("accept-disclaimer").addEventListener("click", () => {
+    markDisclaimerAccepted();
+    pendingDocsOnboarding = !hasSeenDocsOnboarding();
+    if (location.hash !== "#/home") {
+      location.hash = "/home";
+    } else {
+      render();
+    }
+  });
+
+  document.getElementById("decline-disclaimer").addEventListener("click", () => {
+    try { window.close(); } catch (_) { /* ignore */ }
+    const hint = document.getElementById("gate-exit-hint");
+    if (hint) hint.hidden = false;
+  });
+}
+
+function maybeShowDocsOnboarding(path) {
+  if (path !== "/home") return;
+  if (!pendingDocsOnboarding && hasSeenDocsOnboarding()) return;
+  if (document.getElementById("docs-onboarding")) return;
+
+  pendingDocsOnboarding = false;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-backdrop";
+  overlay.id = "docs-onboarding";
+  overlay.innerHTML = `
+    <div class="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="docs-onboarding-title">
+      <div class="notice-header">FIRST RUN GUIDE</div>
+      <h2 id="docs-onboarding-title">先阅读 DOCS，再开始使用</h2>
+      <p class="phone-warning"><strong>使用前必读：</strong>${PHONE_SESSION_WARNING}</p>
+      <p>第一次使用建议先阅读产品说明书，了解学校刷新、账号授权、路径、人脸、里程与常见问题。</p>
+      <div class="btn-row">
+        <button class="btn" id="open-docs">打开 DOCS</button>
+        <button class="btn secondary" id="skip-docs">稍后再说</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById("open-docs").addEventListener("click", () => {
+    markDocsOnboardingSeen();
+    overlay.remove();
+    nav("/docs");
+  });
+  document.getElementById("skip-docs").addEventListener("click", () => {
+    markDocsOnboardingSeen();
+    overlay.remove();
   });
 }
 

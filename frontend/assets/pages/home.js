@@ -21,7 +21,7 @@ export async function render(root) {
 
     <div class="footer-note">
       本程序仅供学习与研究使用 &middot; 使用风险自负 &middot;
-      详见 <a href="#/settings">SETTINGS / 免责声明</a>
+      详见 <a href="#/docs">DOCS / 使用说明</a>
     </div>
   `;
 }
