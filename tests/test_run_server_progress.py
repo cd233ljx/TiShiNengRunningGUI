@@ -89,3 +89,53 @@ async def test_start_run_emits_phase_sequence_private():
     assert "path_gen" in phases, f"phases={phases}"
     # preparing 应早于 path_gen
     assert phases.index("preparing") < phases.index("path_gen")
+
+
+@pytest.mark.asyncio
+async def test_upload_run_path_heartbeats_running_events(monkeypatch):
+    """uploadRunPath 在等待跑步真实结束期间，应周期性 emit running 事件。
+
+    用 fake time.time 制造一个需要等待 ~6 秒的场景，2 秒心跳应至少触发 2~3 次。
+    """
+    cb = MagicMock()
+    server = TsnRunServer(
+        accountId=1, runKiloMeter=0.5, logRunType=TsnRunType.freedom,
+        progress_callback=cb,
+    )
+    server.isPublic = False
+    server.start_timestamp = 1_700_000_000_000  # 毫秒
+    server.identify = "id-1"
+    server.geofence = {}
+    server.pointList = []
+    server.isEndFace = 0
+    server.exerciseSetting = {}
+    server.endStride = 0
+    server.limitSpeed = 0
+    server.endLimitStepFrequency = 0
+
+    # 模拟 path 让 endTime = start + 6 秒
+    path = [{"longitude": 1.0, "latitude": 2.0, "time": 1_700_000_006_000}]
+
+    # 把 tsnClient 全部 mock
+    server.tsnClient = MagicMock()
+    server.tsnClient.appAddSportRecord = AsyncMock(return_value={})
+    server.tsnClient.sumSportRecord = AsyncMock(return_value={})
+    server.tsnClient.appSportRecordList = AsyncMock(
+        return_value={"data": [{"sportStatus": 1, "remark": ""}]}
+    )
+
+    # 让 time.time 返回 endTime - 6s（即剩余 6 秒）
+    fake_now = [1_700_000_000.0]
+    monkeypatch.setattr("tsnRunServer.time.time", lambda: fake_now[0])
+
+    # 加速 sleep：每次 sleep 把 fake_now 推进对应秒数后立即返回
+    async def fast_sleep(sec):
+        fake_now[0] += sec
+    monkeypatch.setattr("tsnRunServer.asyncio.sleep", fast_sleep)
+
+    await server.uploadRunPath(path, stepNumbers=[10], sumDistance=500.0)
+
+    phases = [c.args[0]["phase"] for c in cb.call_args_list]
+    running_count = sum(1 for p in phases if p == "running")
+    assert running_count >= 2, f"heartbeat 应至少触发 2 次，实际 {running_count}, phases={phases}"
+    assert "uploading" in phases, f"上传阶段需 emit，phases={phases}"

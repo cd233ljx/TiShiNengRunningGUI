@@ -322,11 +322,12 @@ class TsnRunServer:
         logger.info(f'配速：{pace}')
         logger.info(f'usedTime:{usedTime}')
         sleepTime = int(endTime) / 1000 - time.time()
-        taskList = []
         logger.info(f'等待{sleepTime}秒')
-        taskList.append(asyncio.sleep(sleepTime))
+
+        # 中途人脸任务保持原行为（当前 middleFacePoints 总是空，但保留扩展点）
         middleFacePoints = []
         logger.info(middleFacePoints)
+        midface_tasks = []
         for middleFaceItem in middleFacePoints:
             if sleepTime > 0:
                 middleUsedTime = int(middleFaceItem['timestamp']) / 1000 - time.time()
@@ -337,10 +338,31 @@ class TsnRunServer:
             latitude = middleFaceItem['latitude']
             longitude = middleFaceItem['longitude']
             coordinates = f"{latitude},{longitude}"
-            taskList.append(self.uploadFace(coordinates=coordinates, sleep=middleUsedTime, faceType=2))
-        await asyncio.gather(*taskList)
+            midface_tasks.append(self.uploadFace(coordinates=coordinates, sleep=middleUsedTime, faceType=2))
+
+        # 2 秒心跳循环替换一次性 sleep —— 既能 emit 进度，又能响应 task.cancel()
+        if sleepTime > 0:
+            total = sleepTime
+            elapsed = 0.0
+            while elapsed < total:
+                tick = min(2.0, total - elapsed)
+                # emit 当前进度（distance 估算：按比例线性推进）
+                progress_ratio = elapsed / total if total > 0 else 1.0
+                self._emit(
+                    "running",
+                    elapsed_s=int(elapsed),
+                    total_s=int(total),
+                    distance_km=round(sumDistance / 1000 * progress_ratio, 3),
+                )
+                await asyncio.sleep(tick)
+                elapsed += tick
+
+        # 心跳结束后并行执行中途人脸（保持原顺序：先等待，再人脸）
+        if midface_tasks:
+            await asyncio.gather(*midface_tasks)
         avgSpeed = round(sumDistance / usedTime * 3.6, 2)
         if self.isEndFace == 1:
+            self._emit("face_end", msg="结束人脸验证...")
             logger.info('结束跑人脸识别')
             lastPoint = path[-1]
             if self.isPublic:
@@ -358,6 +380,7 @@ class TsnRunServer:
             if 'okRadius' in point:
                 point['okRadius'] = float(point['okRadius'])
         logger.info('上传跑步数据')
+        self._emit("uploading", msg="上传运动记录...")
         for item in path:
             item.pop('distance', None)
         if self.isPublic:
