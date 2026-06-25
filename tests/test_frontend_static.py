@@ -60,7 +60,7 @@ def test_docs_onboarding_emphasizes_phone_logout_warning():
     readme = read_frontend("README.md")
 
     required = "最近一段时间内不要再次登录手机端"
-    assert required in app
+    assert "PHONE_SESSION_WARNING" in app   # app.js imports the constant, docs.js/README inline the literal
     assert required in docs
     assert required in readme
     assert "ts_docs_onboarding_seen" in app
