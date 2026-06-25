@@ -49,6 +49,8 @@ def create_app(api_token: str) -> FastAPI:
     app.include_router(face.router)
     from webapp.routers import spider
     app.include_router(spider.router)
+    from webapp.routers import distance
+    app.include_router(distance.router)
 
     # 全局异常 → 统一 {code, msg}
     from fastapi import HTTPException
