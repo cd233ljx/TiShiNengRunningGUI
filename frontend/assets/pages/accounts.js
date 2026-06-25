@@ -1,13 +1,17 @@
 import { api, wsUrl, toast, friendlyError } from "../app.js";
 
 export async function render(root) {
-  root.innerHTML = `<div class="card"><h2>账号管理</h2><div id="accounts-list" class="loading">加载中...</div></div>
+  root.innerHTML = `<h1 class="page-title">ACCOUNTS</h1>
+    <div class="card"><h2>已授权账号</h2><div id="accounts-list" class="loading">加载中</div></div>
     <div class="card">
       <h2>添加新账号</h2>
       <form id="auth-form">
         <div class="field">
           <label>学校</label>
-          <select id="school-select" class="select"><option value="">先点 "刷新学校列表"</option></select>
+          <input id="school-search" class="input" placeholder="输入学校名或代码筛选..."
+                 style="margin-bottom:6px; display:none;" autocomplete="off">
+          <select id="school-select" class="select" size="1"><option value="">先点 "刷新学校列表"</option></select>
+          <div id="school-meta" class="subtitle" style="font-size:10.5px; font-family:var(--font-mono); letter-spacing:0.12em; margin-top:6px;"></div>
         </div>
         <div class="field">
           <label>用户名</label>
@@ -21,12 +25,16 @@ export async function render(root) {
           <button type="button" class="btn secondary" id="refresh-schools">刷新学校列表</button>
           <button type="submit" class="btn">授权</button>
         </div>
-        <div id="refresh-progress" class="subtitle" style="margin-top:10px; display:none;"></div>
+        <div id="refresh-progress" class="subtitle" style="margin-top:10px; display:none; font-family:var(--font-mono); font-size:11px; letter-spacing:0.08em;"></div>
       </form>
     </div>`;
 
   await reloadAccounts();
   await loadSchools();
+
+  document.getElementById("school-search").addEventListener("input", (e) => {
+    applySchoolFilter(e.target.value);
+  });
 
   document.getElementById("refresh-schools").addEventListener("click", async (e) => {
     const btn = e.target;
@@ -63,15 +71,56 @@ export async function render(root) {
 
 async function loadSchools() {
   const sel = document.getElementById("school-select");
+  const search = document.getElementById("school-search");
+  const meta = document.getElementById("school-meta");
   try {
     const r = await api("/api/schools");
     if (!r.items.length) {
-      sel.innerHTML = '<option value="">尚无学校 — 请先刷新</option>'; return;
+      sel.innerHTML = '<option value="">尚无学校 — 请先刷新</option>';
+      if (search) search.style.display = "none";
+      if (meta) meta.textContent = "";
+      return;
     }
-    sel.innerHTML = '<option value="">请选择学校</option>' +
-      r.items.map(s => `<option value="${s.school_id}">${s.school_name} (${s.sys_type === 2 ? '公版' : '私版'})</option>`).join("");
+    // 缓存全量，搜索时复用
+    sel._allSchools = r.items;
+    renderSchoolOptions(r.items);
+    if (search) {
+      search.style.display = "";
+      search.value = "";  // 重置搜索
+    }
+    if (meta) meta.textContent = `共 ${r.items.length} 所学校`;
   } catch (err) {
     sel.innerHTML = `<option value="">加载失败: ${err.message}</option>`;
+  }
+}
+
+function renderSchoolOptions(items) {
+  const sel = document.getElementById("school-select");
+  if (!items.length) {
+    sel.innerHTML = '<option value="">无匹配学校</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">请选择学校</option>' +
+    items.map(s => `<option value="${s.school_id}">${s.school_name} (${s.sys_type === 2 ? '公版' : '私版'})</option>`).join("");
+}
+
+function applySchoolFilter(query) {
+  const sel = document.getElementById("school-select");
+  const meta = document.getElementById("school-meta");
+  const all = sel._allSchools || [];
+  const q = (query || "").trim().toLowerCase();
+  const filtered = q
+    ? all.filter(s => {
+        const name = (s.school_name || "").toLowerCase();
+        const code = (s.school_code || "").toLowerCase();
+        return name.includes(q) || code.includes(q);
+      })
+    : all;
+  renderSchoolOptions(filtered);
+  if (meta) {
+    meta.textContent = q
+      ? `匹配 ${filtered.length} / ${all.length} 所`
+      : `共 ${all.length} 所学校`;
   }
 }
 

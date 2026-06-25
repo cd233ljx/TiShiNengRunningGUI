@@ -1,27 +1,28 @@
 import { api, toast, friendlyError, nav } from "../app.js";
 
 const RUN_TYPES = [
-  { key: "morning", label: "晨跑", icon: "🌅" },
-  { key: "sun",     label: "阳光跑", icon: "☀️" },
-  { key: "freedom", label: "自由跑", icon: "🏃" },
+  { key: "morning", label: "晨跑",   hint: "MORNING" },
+  { key: "sun",     label: "阳光跑", hint: "DAYTIME" },
+  { key: "freedom", label: "自由跑", hint: "ANYTIME" },
 ];
 
 export async function render(root) {
   let accounts = [];
   try { accounts = (await api("/api/accounts")).items; }
   catch (err) {
-    root.innerHTML = `<div class="card"><h2>开始跑步</h2><div class="empty">加载账号失败：${err.message}</div></div>`;
+    root.innerHTML = `<h1 class="page-title">NEW RUN</h1>
+      <div class="card"><div class="empty">加载账号失败：${err.message}</div></div>`;
     return;
   }
   if (!accounts.length) {
-    root.innerHTML = `<div class="card"><h2>开始跑步</h2>
-      <div class="empty">尚未授权任何账号，<a href="#/accounts">去添加 →</a></div></div>`;
+    root.innerHTML = `<h1 class="page-title">NEW RUN</h1>
+      <div class="card"><div class="empty">尚未授权任何账号，<a href="#/accounts">去添加</a></div></div>`;
     return;
   }
 
   root.innerHTML = `
+    <h1 class="page-title">NEW RUN</h1>
     <div class="card">
-      <h2>开始跑步</h2>
       <form id="run-form">
         <div class="field">
           <label>账号</label>
@@ -32,7 +33,11 @@ export async function render(root) {
         <div class="field">
           <label>跑步类型</label>
           <div class="run-type-pick" id="run-types">
-            ${RUN_TYPES.map(t => `<div class="pick" data-key="${t.key}">${t.icon}<br>${t.label}</div>`).join("")}
+            ${RUN_TYPES.map(t => `
+              <div class="pick" data-key="${t.key}">
+                <div style="font-family:var(--font-display); font-size:18px; letter-spacing:0.05em; color:var(--ink);">${t.label}</div>
+                <div style="margin-top:6px; font-family:var(--font-mono); font-size:10px; letter-spacing:0.18em; color:var(--mute);">${t.hint}</div>
+              </div>`).join("")}
           </div>
         </div>
         <div class="field">

@@ -130,3 +130,25 @@ window.addEventListener("DOMContentLoaded", () => {
 export function nav(path) {
   location.hash = path.startsWith("#") ? path : `#${path}`;
 }
+
+// === 外链拦截 ============
+// PyWebView 内点击 http(s) 链接默认会让 SPA 跳走。拦截这些点击，
+// 尝试 window.open（pywebview 会在系统浏览器打开），失败则复制 URL 到剪贴板。
+document.addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest("a[href]");
+  if (!a) return;
+  const href = a.getAttribute("href");
+  if (!/^https?:\/\//i.test(href)) return;  // 内部 hash 链接放行
+  e.preventDefault();
+  let opened = null;
+  try { opened = window.open(href, "_blank"); } catch (_) {}
+  if (opened) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(href).then(
+      () => toast("链接已复制：" + href, "success"),
+      () => toast("无法打开外链，请手动复制", "error"),
+    );
+  } else {
+    toast("无法打开外链，URL：" + href);
+  }
+});

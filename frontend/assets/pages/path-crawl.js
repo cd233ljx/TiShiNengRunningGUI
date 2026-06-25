@@ -3,25 +3,30 @@ import { api, wsUrl, toast, friendlyError } from "../app.js";
 export async function render(root) {
   let accounts = [];
   try { accounts = (await api("/api/accounts")).items; } catch (e) {
-    root.innerHTML = `<div class="card"><h2>爬取路径数据</h2><div class="empty">${e.message}</div></div>`; return;
+    root.innerHTML = `<h1 class="page-title">PATH CRAWL</h1>
+      <div class="card"><div class="empty">${e.message}</div></div>`;
+    return;
   }
   if (!accounts.length) {
-    root.innerHTML = `<div class="card"><h2>爬取路径数据</h2><div class="empty">尚无账号，<a href="#/accounts">去添加</a></div></div>`; return;
+    root.innerHTML = `<h1 class="page-title">PATH CRAWL</h1>
+      <div class="card"><div class="empty">尚无账号，<a href="#/accounts">去添加</a></div></div>`;
+    return;
   }
 
-  root.innerHTML = `<div class="card">
-    <h2>爬取路径数据</h2>
-    <p class="subtitle">从所选账号的历史运动记录中提取路径，存到本地数据库供跑步复用</p>
-    <div class="field"><label>账号</label>
-      <select id="acc" class="select">
-        ${accounts.map(a => `<option value="${a.id}">${a.username} · ${a.school_name || ""}</option>`).join("")}
-      </select>
-    </div>
-    <div class="btn-row">
-      <button class="btn" id="go">开始爬取</button>
-    </div>
-    <div id="status" class="subtitle" style="margin-top:12px;"></div>
-  </div>`;
+  root.innerHTML = `
+    <h1 class="page-title">PATH CRAWL</h1>
+    <div class="card">
+      <p class="subtitle">从所选账号的历史运动记录中提取路径，存到本地数据库供跑步复用</p>
+      <div class="field"><label>账号</label>
+        <select id="acc" class="select">
+          ${accounts.map(a => `<option value="${a.id}">${a.username} · ${a.school_name || ""}</option>`).join("")}
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="go">开始爬取</button>
+      </div>
+      <div id="status" class="subtitle" style="margin-top:16px; font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em;"></div>
+    </div>`;
 
   document.getElementById("go").addEventListener("click", async (e) => {
     e.target.disabled = true;
