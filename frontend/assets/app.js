@@ -16,6 +16,7 @@ const DOCS_ONBOARDING_SEEN_KEY = "ts_docs_onboarding_seen";
 
 const memoryLocalStorage = new Map();
 let pendingDocsOnboarding = false;
+let pendingDocsSeenAfterDocsOpen = false;
 
 // ============ token 引导 ============
 (function bootstrapToken() {
@@ -101,11 +102,12 @@ setTheme(getTheme());
 
 // ============ localStorage 安全封装 ============
 function safeLocalGet(key) {
+  if (memoryLocalStorage.has(key)) return memoryLocalStorage.get(key);
   try {
     const value = localStorage.getItem(key);
     if (value !== null) return value;
   } catch { /* fall back to memory */ }
-  return memoryLocalStorage.has(key) ? memoryLocalStorage.get(key) : null;
+  return null;
 }
 
 function safeLocalSet(key, value) {
@@ -159,6 +161,10 @@ async function render() {
     const mod = await loader();
     const params = Object.fromEntries(new URLSearchParams(query || ""));
     await mod.render(root, params);
+    if (path === "/docs" && pendingDocsSeenAfterDocsOpen) {
+      markDocsOnboardingSeen();
+      pendingDocsSeenAfterDocsOpen = false;
+    }
   } catch (e) {
     console.error(e);
     root.innerHTML = `<div class="card"><h2>页面加载失败</h2><p>${e.message}</p></div>`;
@@ -192,11 +198,7 @@ function renderDisclaimerGate() {
   document.getElementById("accept-disclaimer").addEventListener("click", () => {
     markDisclaimerAccepted();
     pendingDocsOnboarding = !hasSeenDocsOnboarding();
-    if (location.hash !== "#/home") {
-      location.hash = "/home";
-    } else {
-      render();
-    }
+    renderAfterDisclaimerAccepted();
   });
 
   document.getElementById("decline-disclaimer").addEventListener("click", () => {
@@ -206,8 +208,24 @@ function renderDisclaimerGate() {
   });
 }
 
+function renderAfterDisclaimerAccepted() {
+  if (!location.hash) {
+    location.hash = "/home";
+    return;
+  }
+  render();
+}
+
+function clearDocsOnboarding() {
+  const overlay = document.getElementById("docs-onboarding");
+  if (overlay) overlay.remove();
+}
+
 function maybeShowDocsOnboarding(path) {
-  if (path !== "/home") return;
+  if (path !== "/home") {
+    clearDocsOnboarding();
+    return;
+  }
   if (!pendingDocsOnboarding && hasSeenDocsOnboarding()) return;
   if (document.getElementById("docs-onboarding")) return;
 
@@ -229,7 +247,7 @@ function maybeShowDocsOnboarding(path) {
   document.body.appendChild(overlay);
 
   document.getElementById("open-docs").addEventListener("click", () => {
-    markDocsOnboardingSeen();
+    pendingDocsSeenAfterDocsOpen = true;
     overlay.remove();
     nav("/docs");
   });

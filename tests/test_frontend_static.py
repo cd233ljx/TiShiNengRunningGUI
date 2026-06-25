@@ -90,3 +90,38 @@ def test_readme_is_gui_first_and_keeps_developer_commands():
     assert "python gui_app.py --dev" in readme
     assert "python -m pytest tests/ -q" in readme
     assert "python -m PyInstaller tishineng.spec --clean --noconfirm" in readme
+
+
+def test_disclaimer_acceptance_preserves_existing_hash():
+    """Accepting the disclaimer must not clobber deep links or query params."""
+    app = read_frontend("frontend/assets/app.js")
+
+    assert 'location.hash !== "#/home"' not in app
+    assert "renderAfterDisclaimerAccepted" in app
+
+
+def test_safe_local_get_prefers_memory_fallback_over_stale_local_storage():
+    """Memory fallback writes must shadow stale localStorage values after setItem fails."""
+    app = read_frontend("frontend/assets/app.js")
+    safe_get = app[app.index("function safeLocalGet"):app.index("function safeLocalSet")]
+
+    assert "if (memoryLocalStorage.has(key))" in safe_get
+    assert safe_get.index("if (memoryLocalStorage.has(key))") < safe_get.index("localStorage.getItem(key)")
+
+
+def test_docs_onboarding_clears_on_route_leave_and_marks_seen_after_docs_render():
+    """Docs onboarding should clear off-home and only mark seen after DOCS renders."""
+    app = read_frontend("frontend/assets/app.js")
+    onboarding = app[app.index("function maybeShowDocsOnboarding"):app.index("window.addEventListener")]
+    off_home_branch = onboarding[
+        onboarding.index('if (path !== "/home")'):onboarding.index("if (!pendingDocsOnboarding")
+    ]
+    open_docs_handler = onboarding[
+        onboarding.index('document.getElementById("open-docs").addEventListener("click"'):
+        onboarding.index('document.getElementById("skip-docs")')
+    ]
+
+    assert "clearDocsOnboarding" in app
+    assert "pendingDocsSeenAfterDocsOpen" in app
+    assert "clearDocsOnboarding();" in off_home_branch
+    assert "markDocsOnboardingSeen();" not in open_docs_handler
