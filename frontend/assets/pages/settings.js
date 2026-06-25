@@ -1,21 +1,12 @@
 import { getTheme, setTheme, toast } from "../app.js";
+import { renderDisclaimerNotice } from "../disclaimer.js";
 
 export async function render(root) {
   const cur = getTheme();
   root.innerHTML = `
     <h1 class="page-title">SETTINGS</h1>
 
-    <div class="notice">
-      <div class="notice-header">DISCLAIMER &middot; 免责声明</div>
-      <p>本程序为学习用途，仅用于研究体育数据接口的逆向工程。在你启动它之前，请逐条确认：</p>
-      <ul>
-        <li>使用本程序辅助完成校园体测，可能违反所在学校的学生守则或体育课程纪律</li>
-        <li>由此产生的任何后果（账号封禁、课程处分、信用记录等）由使用者本人承担</li>
-        <li>本程序的作者及贡献者不为任何使用行为承担法律、纪律或行政责任</li>
-        <li>账号凭证、跑步记录、运行日志均存储在本地，不向第三方上传</li>
-      </ul>
-      <p class="footnote">继续使用本程序，视为已阅读并同意上述条款。</p>
-    </div>
+    ${renderDisclaimerNotice()}
 
     <div class="card">
       <div class="field">
