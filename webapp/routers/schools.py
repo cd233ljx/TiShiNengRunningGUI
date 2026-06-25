@@ -25,11 +25,11 @@ def _make_client() -> TiShiNengPrivate:
     return TiShiNengPrivate(1, 1, '', False, str(uuid.uuid4()), 'Xiaomi', '25053RT47C', "")
 
 
-def _get_school_info(school_code: str) -> Optional[dict]:
-    """对公版学校请求内网 URL。失败返回 None。"""
+async def _get_school_info_async(school_code: str, client: httpx.AsyncClient) -> Optional[dict]:
+    """对公版学校请求内网 URL。失败返回 None。复用调用方的 AsyncClient 连接池。"""
     try:
         url = f"https://h.tsnkj.com/upms/sysSchool/getSchoolInfo?schoolCode={school_code}"
-        resp = httpx.get(url, headers={"User-Agent": "okhttp/4.9.0"}, timeout=10.0)
+        resp = await client.get(url, headers={"User-Agent": "okhttp/4.9.0"}, timeout=10.0)
         return resp.json().get("data")
     except Exception as e:
         logger.debug(f"_get_school_info failed for {school_code}: {e}")
@@ -59,26 +59,45 @@ async def refresh_schools(db: AsyncSession = Depends(get_db)) -> dict:
         return {"total": 0, "msg": "未获取到省份列表"}
 
     total = 0
-    for province in resp['data']:
-        plist = await tsn.listSchoolByProvinceId(province['province_id'])
-        if not plist or 'data' not in plist:
-            continue
-        for school in plist['data']:
-            name = school['school_name']
-            if 'demo' in name.lower() or 'test' in name.lower():
+    skipped = 0
+    async with httpx.AsyncClient() as http:
+        for province in resp['data']:
+            try:
+                plist = await tsn.listSchoolByProvinceId(province['province_id'])
+            except Exception as e:
+                logger.warning(f"获取省份 {province.get('province_name')} 学校列表失败: {e}")
+                skipped += 1
                 continue
-            lan_url = None
-            if school['sysType'] == '2':
-                info = _get_school_info(school['schoolCode'])
-                if info and info.get("url"):
-                    lan_url = f"https://{info['url']}"
-            await addOrUpdateSchool(
-                school['school_id'], school['school_name'], school['school_url'],
-                lan_url, school['openId'],
-                school['isOpenKeep'] == '1',
-                school['isOpenLive'] == '1',
-                school['isOpenEncry'] == '1',
-                int(school['sysType']), school['schoolCode'], db,
-            )
-            total += 1
-    return {"total": total}
+            if not plist or 'data' not in plist:
+                continue
+            for school in plist['data']:
+                name = school['school_name']
+                if 'demo' in name.lower() or 'test' in name.lower():
+                    continue
+                lan_url = None
+                if school['sysType'] == '2':
+                    info = await _get_school_info_async(school['schoolCode'], http)
+                    if info and info.get("url"):
+                        lan_url = f"https://{info['url']}"
+                try:
+                    await addOrUpdateSchool(
+                        school['school_id'], school['school_name'], school['school_url'],
+                        lan_url, school['openId'],
+                        school['isOpenKeep'] == '1',
+                        school['isOpenLive'] == '1',
+                        school['isOpenEncry'] == '1',
+                        int(school['sysType']), school['schoolCode'], db,
+                    )
+                    total += 1
+                except Exception as e:
+                    logger.warning(f"写入学校 {name} 失败: {e}")
+                    skipped += 1
+                    continue
+            # 每个省份处理完 commit 一次，缩短事务持有时间
+            try:
+                await db.commit()
+            except Exception as e:
+                logger.warning(f"提交省份 {province.get('province_name')} 失败: {e}")
+                await db.rollback()
+
+    return {"total": total, "skipped": skipped}
