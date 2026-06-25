@@ -1,4 +1,5 @@
 import json
+from typing import Callable, Optional
 
 from loguru import logger
 from sqlalchemy import select, func
@@ -103,13 +104,26 @@ async def processRawAndAddDateBase(schoolCode, rawData, isPublic=True):
     await AddDateBase(runPathId, runLineList, sportRange, pointIdList, okPointListJson, schoolCode, isPublic=isPublic)
 
 
-async def startSpider(accountId: int) -> None:
+async def startSpider(accountId: int,
+                      progress_callback: Optional[Callable[[dict], None]] = None) -> None:
+    def _emit(phase: str, **kw):
+        if progress_callback is None:
+            return
+        try:
+            progress_callback({"phase": phase, **kw})
+        except Exception:  # noqa: BLE001
+            logger.warning("progress_callback raised; ignored")
+
     tsnClient: TiShiNengPrivate | TiShiNengSdkPublic | None = None
     async for newDb in get_db():
         tsnClient = await getTsnClientById(accountId, newDb)
+
+    _emit("preparing", msg="加载账号客户端...")
+
     if tsnClient.isPublic():
         baseRecord = await tsnClient.listExerciseRecord(1, '', 1)
         dates = baseRecord['dates']
+        total_records_seen = 0
         for date in dates:
             recodeIdList = []
             for pageIndex in range(1, 10):
@@ -130,12 +144,14 @@ async def startSpider(accountId: int) -> None:
                 if rawRecord['sportType'] != '0' and int(rawRecord['step']) >= 500:
                     logger.info(f" {tsnClient.schoolCode} {rawRecord}")
                     await processRawAndAddDateBase(tsnClient.schoolCode, rawRecord)
+                    total_records_seen += 1
+                    _emit("crawling", current=total_records_seen)
     else:
         recodeIdList = []
         for pageIndex in range(1, 10):
             resp = await tsnClient.appSportRecordList(2, pageIndex, 10)
             # logger.info(resp)
-            if 'data' not in resp:
+            if 'data' not in resp or not resp['data']:
                 break
             breakFlag = False
             for data in resp['data']:
@@ -148,7 +164,10 @@ async def startSpider(accountId: int) -> None:
                     recodeIdList.append(data['id'])
             if breakFlag:
                 break
-        for i in recodeIdList:
+        for idx, i in enumerate(recodeIdList, 1):
             rawRecord = await tsnClient.getSportRecordId(i)
             if int(rawRecord['sportStatus']) == 1 and sum(rawRecord['stepNumbers']) >= 500:
                 await processRawAndAddDateBase(tsnClient.schoolCode, rawRecord, isPublic=False)
+                _emit("crawling", current=idx, total=len(recodeIdList))
+
+    _emit("done")
