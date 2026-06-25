@@ -6,6 +6,7 @@ import json
 import random
 import time
 from pathlib import Path
+from typing import Callable, Optional
 
 import httpx
 from PIL import Image
@@ -39,7 +40,8 @@ def seconds_to_time_format(total_seconds):
 
 
 class TsnRunServer:
-    def __init__(self, accountId: int, runKiloMeter: float, logRunType: TsnRunType):
+    def __init__(self, accountId: int, runKiloMeter: float, logRunType: TsnRunType,
+                 progress_callback: Optional[Callable[[dict], None]] = None):
         self.accountId = accountId
         self.runKiloMeter = runKiloMeter
         self.logRunType = logRunType
@@ -67,6 +69,17 @@ class TsnRunServer:
         self.middleFaces = []
         self.startLongitude = 0
         self.startLatitude = 0
+
+        self._progress_callback = progress_callback
+
+    def _emit(self, phase: str, **kw) -> None:
+        """向外推送一次进度事件。回调缺失或抛异常时静默，绝不影响主流程。"""
+        if self._progress_callback is None:
+            return
+        try:
+            self._progress_callback({"phase": phase, **kw})
+        except Exception:  # noqa: BLE001 — 故意吞掉，回调失败不能影响跑步
+            logger.warning("progress_callback raised; ignored")
 
     @classmethod
     def publicRunTypeConvert(cls, runType: TsnRunType):
@@ -309,11 +322,12 @@ class TsnRunServer:
         logger.info(f'配速：{pace}')
         logger.info(f'usedTime:{usedTime}')
         sleepTime = int(endTime) / 1000 - time.time()
-        taskList = []
         logger.info(f'等待{sleepTime}秒')
-        taskList.append(asyncio.sleep(sleepTime))
+
+        # 中途人脸任务保持原行为（当前 middleFacePoints 总是空，但保留扩展点）
         middleFacePoints = []
         logger.info(middleFacePoints)
+        midface_tasks = []
         for middleFaceItem in middleFacePoints:
             if sleepTime > 0:
                 middleUsedTime = int(middleFaceItem['timestamp']) / 1000 - time.time()
@@ -324,10 +338,31 @@ class TsnRunServer:
             latitude = middleFaceItem['latitude']
             longitude = middleFaceItem['longitude']
             coordinates = f"{latitude},{longitude}"
-            taskList.append(self.uploadFace(coordinates=coordinates, sleep=middleUsedTime, faceType=2))
-        await asyncio.gather(*taskList)
+            midface_tasks.append(self.uploadFace(coordinates=coordinates, sleep=middleUsedTime, faceType=2))
+
+        # 2 秒心跳循环替换一次性 sleep —— 既能 emit 进度，又能响应 task.cancel()
+        if sleepTime > 0:
+            total = sleepTime
+            elapsed = 0.0
+            while elapsed < total:
+                tick = min(2.0, total - elapsed)
+                # emit 当前进度（distance 估算：按比例线性推进）
+                progress_ratio = elapsed / total if total > 0 else 1.0
+                self._emit(
+                    "running",
+                    elapsed_s=int(elapsed),
+                    total_s=int(total),
+                    distance_km=round(sumDistance / 1000 * progress_ratio, 3),
+                )
+                await asyncio.sleep(tick)
+                elapsed += tick
+
+        # 心跳结束后并行执行中途人脸（保持原顺序：先等待，再人脸）
+        if midface_tasks:
+            await asyncio.gather(*midface_tasks)
         avgSpeed = round(sumDistance / usedTime * 3.6, 2)
         if self.isEndFace == 1:
+            self._emit("face_end", msg="结束人脸验证...")
             logger.info('结束跑人脸识别')
             lastPoint = path[-1]
             if self.isPublic:
@@ -345,6 +380,7 @@ class TsnRunServer:
             if 'okRadius' in point:
                 point['okRadius'] = float(point['okRadius'])
         logger.info('上传跑步数据')
+        self._emit("uploading", msg="上传运动记录...")
         for item in path:
             item.pop('distance', None)
         if self.isPublic:
@@ -411,6 +447,7 @@ class TsnRunServer:
             logger.info("跑步数据上传完成")
 
     async def startRun(self):
+        self._emit("preparing", msg="加载账号信息...")
         async for newDb in get_db():
             self.accountModel = await getTsnAccountByid(self.accountId, newDb)
             self.tsnClient = await getTsnClientById(self.accountModel.id, newDb)
@@ -443,6 +480,7 @@ class TsnRunServer:
         if self.logRunType not in canRunTypeList:
             raise TiShiNengError('当前跑步类型不可用', 200000)
 
+        self._emit("path_gen", msg="生成跑步路径...")
         runLinePath = await self.queryPath()
         startPoint = runLinePath[0]
         logger.info(f"起点信息：{startPoint}")
@@ -476,6 +514,7 @@ class TsnRunServer:
         if not (len(self.middleFaces) > 0 or self.isStartFace == 1 or self.isEndFace == 1 or self.isMidwayFace == 1):
             self.isFaceStatus = 0
         if self.isStartFace == 1:
+            self._emit("face_start", msg="开始人脸验证...")
             logger.info('开始人脸识别')
             coordinates = f"{self.startLatitude},{self.startLongitude}"
             await asyncio.sleep(random.uniform(7, 12))
