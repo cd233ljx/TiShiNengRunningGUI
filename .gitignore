@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Build artifacts
+dist/
+build/
+*.spec.bak
+
+# App runtime data (portable layout)
+tsn_data.db
+tsn_data.db-journal
+face_images/
+logs/
+config.json
+
+# IDE
+.vscode/
+.idea/
+
+# Brainstorming
+.superpowers/
