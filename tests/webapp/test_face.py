@@ -1,6 +1,8 @@
 """更新人脸：把现有 main.py update_face_images 的核心包成端点。"""
 from unittest.mock import AsyncMock, patch
 
+from tests.webapp.conftest import wait_for_task_done
+
 
 def _seed_account(client, api_token):
     """同 test_run.py 的种子，复制以保持各测试文件自闭。"""
@@ -12,7 +14,8 @@ def _seed_account(client, api_token):
                   "sysType": "1", "schoolCode": "F333"}]
     })
     with patch("webapp.routers.schools._make_client", return_value=fake):
-        client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        r = client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        wait_for_task_done(client, api_token, r.json()["task_id"])
 
     async def fake_auth(school_id, username, password, session):
         from models import TsnAccount_Model

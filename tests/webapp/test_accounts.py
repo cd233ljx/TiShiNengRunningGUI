@@ -1,6 +1,8 @@
 """账号 CRUD + 授权端点测试。"""
 from unittest.mock import AsyncMock, patch
 
+from tests.webapp.conftest import wait_for_task_done
+
 
 def _seed_school(client, api_token, monkeypatch):
     """辅助：插入一所测试学校。"""
@@ -15,7 +17,8 @@ def _seed_school(client, api_token, monkeypatch):
                   "sysType": "1", "schoolCode": "S111"}]
     })
     with patch("webapp.routers.schools._make_client", return_value=fake_tsn):
-        client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        r = client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        wait_for_task_done(client, api_token, r.json()["task_id"])
 
 
 def test_list_accounts_empty(client, api_token):

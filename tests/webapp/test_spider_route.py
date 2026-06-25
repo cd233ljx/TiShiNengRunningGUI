@@ -1,6 +1,8 @@
 """路径爬取路由测试。startSpider 已在 Phase 1 改为支持 callback；这里只需测端点能立即返回 task_id。"""
 from unittest.mock import AsyncMock, patch
 
+from tests.webapp.conftest import wait_for_task_done
+
 
 def _seed_account(client, api_token):
     fake = AsyncMock()
@@ -11,7 +13,8 @@ def _seed_account(client, api_token):
                   "sysType": "1", "schoolCode": "P444"}]
     })
     with patch("webapp.routers.schools._make_client", return_value=fake):
-        client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        r = client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        wait_for_task_done(client, api_token, r.json()["task_id"])
 
     async def fake_auth(school_id, username, password, session):
         from models import TsnAccount_Model

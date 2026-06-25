@@ -1,4 +1,4 @@
-import { api, toast, friendlyError } from "../app.js";
+import { api, wsUrl, toast, friendlyError } from "../app.js";
 
 export async function render(root) {
   root.innerHTML = `<div class="card"><h2>账号管理</h2><div id="accounts-list" class="loading">加载中...</div></div>
@@ -21,6 +21,7 @@ export async function render(root) {
           <button type="button" class="btn secondary" id="refresh-schools">刷新学校列表</button>
           <button type="submit" class="btn">授权</button>
         </div>
+        <div id="refresh-progress" class="subtitle" style="margin-top:10px; display:none;"></div>
       </form>
     </div>`;
 
@@ -28,15 +29,14 @@ export async function render(root) {
   await loadSchools();
 
   document.getElementById("refresh-schools").addEventListener("click", async (e) => {
-    e.target.disabled = true; e.target.textContent = "刷新中...";
+    const btn = e.target;
+    btn.disabled = true; btn.textContent = "启动中...";
     try {
       const r = await api("/api/schools/refresh", { method: "POST" });
-      toast(`已更新 ${r.total} 所学校`, "success");
-      await loadSchools();
+      streamRefreshProgress(r.task_id, btn);
     } catch (err) {
       toast(friendlyError(err.code, err.message), "error");
-    } finally {
-      e.target.disabled = false; e.target.textContent = "刷新学校列表";
+      btn.disabled = false; btn.textContent = "刷新学校列表";
     }
   });
 
@@ -111,4 +111,44 @@ async function confirmDelete(id, label) {
   } catch (err) {
     toast(friendlyError(err.code, err.message), "error");
   }
+}
+
+function streamRefreshProgress(taskId, btn) {
+  const hint = document.getElementById("refresh-progress");
+  hint.style.display = "block";
+  hint.textContent = "等待服务器响应...";
+
+  const reset = () => {
+    btn.disabled = false;
+    btn.textContent = "刷新学校列表";
+  };
+
+  const ws = new WebSocket(wsUrl("/ws/progress", { task: taskId }));
+  ws.onmessage = (ev) => {
+    let evt;
+    try { evt = JSON.parse(ev.data); } catch { return; }
+    if (evt.phase === "refreshing") {
+      const total = evt.total ?? "?";
+      const cur = evt.current ?? "?";
+      const province = evt.province || "";
+      const added = evt.schools_added ?? 0;
+      btn.textContent = `刷新中 ${cur}/${total}...`;
+      hint.textContent = `正在加载省份「${province}」，已收录 ${added} 所学校...`;
+    } else if (evt.phase === "done") {
+      const skipped = evt.skipped ?? 0;
+      toast(`已更新 ${evt.total} 所学校${skipped ? `（跳过 ${skipped}）` : ""}`, "success");
+      hint.style.display = "none";
+      reset();
+      loadSchools();
+    } else if (evt.phase === "error") {
+      toast(friendlyError(evt.code, evt.msg), "error");
+      hint.textContent = `失败：${friendlyError(evt.code, evt.msg)}`;
+      reset();
+    }
+  };
+  ws.onerror = () => {
+    toast("进度连接异常", "error");
+    hint.style.display = "none";
+    reset();
+  };
 }

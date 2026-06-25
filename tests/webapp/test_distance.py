@@ -1,6 +1,8 @@
 """里程查询：复用 main.py:495-650 的查询逻辑，但拍平成单端点。"""
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from tests.webapp.conftest import wait_for_task_done
+
 
 def _seed_account(client, api_token, sys_type="2", school_id=555, school_name="Dist校"):
     fake = AsyncMock()
@@ -11,7 +13,8 @@ def _seed_account(client, api_token, sys_type="2", school_id=555, school_name="D
                   "sysType": sys_type, "schoolCode": f"D{school_id}"}]
     })
     with patch("webapp.routers.schools._make_client", return_value=fake):
-        client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        r = client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        wait_for_task_done(client, api_token, r.json()["task_id"])
 
     async def fake_auth(school_id, username, password, session):
         from models import TsnAccount_Model

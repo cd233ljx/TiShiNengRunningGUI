@@ -3,6 +3,8 @@ import json
 import threading
 from unittest.mock import AsyncMock, patch
 
+from tests.webapp.conftest import wait_for_task_done
+
 
 def _seed_account(client, api_token, monkeypatch):
     """种一个学校 + 一个账号，返回 account_id。"""
@@ -15,7 +17,8 @@ def _seed_account(client, api_token, monkeypatch):
                   "sysType": "1", "schoolCode": "R222"}]
     })
     with patch("webapp.routers.schools._make_client", return_value=fake_tsn):
-        client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        r = client.post("/api/schools/refresh", headers={"X-API-Token": api_token})
+        wait_for_task_done(client, api_token, r.json()["task_id"])
 
     async def fake_auth(school_id, username, password, session):
         from models import TsnAccount_Model
